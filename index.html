@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>卡通橫向打怪遊戲 - 牛仔主角圖像版</title>
+<style>
+  body {
+    margin: 0;
+    background: #bfe9ff;
+    overflow: hidden;
+    font-family: "Arial Rounded MT Bold", sans-serif;
+  }
+  canvas {
+    display: block;
+    margin: auto;
+    background: linear-gradient(#bfe9ff, #eafff1);
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="900" height="500"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+/* ===== 玩家設定 ===== */
+const player = {
+  x: 430,
+  y: 380,
+  w: 80,
+  h: 80,
+  hp: 10,
+  maxHp: 10,
+  level: 1,
+  exp: 0,
+  atk: 1,
+  knockback: 0,
+  direction: 1 // 1:右, -1:左
+};
+
+/* ===== 遊戲狀態 ===== */
+let score = 0;
+let bullets = [];
+let enemies = [];
+let keys = {};
+let fireCooldown = 0;
+let enemySpawnCounter = 0;
+
+/* ===== 載入主角圖片 (新公開網址) ===== */
+const playerImg = new Image();
+playerImg.src = "https://i.postimg.cc/2bs2xmYj/cowboy.png";  // 牛仔圖片
+let imgLoaded = false;
+playerImg.onload = () => {
+  imgLoaded = true;
+  loop();
+};
+
+/* ===== 鍵盤控制 ===== */
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
+
+/* ===== 射擊 ===== */
+function shoot() {
+  bullets.push({
+    x: player.direction === 1 ? player.x + player.w : player.x,
+    y: player.y + player.h / 2,
+    r: 6,
+    speed: (7 + player.level * 0.05) * player.direction,
+    color: `hsl(${player.level * 3}, 80%, 55%)`
+  });
+}
+
+/* ===== 生成敵人 ===== */
+function spawnEnemy() {
+  if (enemies.length >= 6) return;
+  const type = Math.random() < 0.7 ? "green" : "yellow";
+  const speed = 1 + Math.min(player.level * 0.02, 1.8);
+  enemies.push({
+    x: Math.random() < 0.5 ? -50 : canvas.width + 50,
+    y: 380,
+    w: 40,
+    h: 40,
+    hp: type === "green" ? 1 : 2,
+    type,
+    speed
+  });
+}
+
+/* ===== 更新遊戲 ===== */
+function update() {
+  // 玩家移動
+  if (keys["ArrowLeft"]) { player.x -= 4; player.direction = -1; }
+  if (keys["ArrowRight"]) { player.x += 4; player.direction = 1; }
+  player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+
+  // 擊退效果
+  if (player.knockback !== 0) {
+    player.x += player.knockback;
+    player.knockback *= 0.8;
+    if (Math.abs(player.knockback) < 0.5) player.knockback = 0;
+  }
+
+  // 連射
+  if (keys["Space"] && fireCooldown <= 0) {
+    shoot();
+    fireCooldown = Math.max(10 - Math.floor(player.level / 15), 5);
+  }
+  if (fireCooldown > 0) fireCooldown--;
+
+  // 子彈移動
+  bullets.forEach(b => b.x += b.speed);
+  bullets = bullets.filter(b => b.x > -20 && b.x < canvas.width + 20);
+
+  // 敵人移動與碰撞
+  enemies.forEach((e, ei) => {
+    e.x += e.x < player.x ? e.speed : -e.speed;
+    if (
+      e.x < player.x + player.w &&
+      e.x + e.w > player.x &&
+      e.y < player.y + player.h
+    ) {
+      player.hp--;
+      player.knockback = e.x < player.x ? 18 : -18;
+      enemies.splice(ei, 1);
+    }
+  });
+
+  // 子彈擊中敵人判定修正
+  bullets.forEach((b, bi) => {
+    enemies.forEach((e, ei) => {
+      const closestX = Math.max(e.x, Math.min(b.x, e.x + e.w));
+      const closestY = Math.max(e.y, Math.min(b.y, e.y + e.h));
+      const dx = b.x - closestX;
+      const dy = b.y - closestY;
+      if (dx*dx + dy*dy <= b.r*b.r) {
+        e.hp -= player.atk;
+        bullets.splice(bi, 1);
+        if (e.hp <= 0) {
+          score += e.type === "yellow" ? 20 : 10;
+          player.exp += e.type === "yellow" ? 20 : 10;
+          enemies.splice(ei, 1);
+        }
+      }
+    });
+  });
+
+  // 升級
+  if (player.exp >= player.level * 50 && player.level < 100) {
+    player.exp = 0;
+    player.level++;
+    player.atk += 0.2;
+  }
+
+  // 敵人生成
+  enemySpawnCounter++;
+  const spawnRate = Math.max(50 - player.level, 30);
+  if (enemySpawnCounter >= spawnRate) {
+    spawnEnemy();
+    enemySpawnCounter = 0;
+  }
+}
+
+/* ===== 繪製畫面 ===== */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 玩家
+  if (imgLoaded) {
+    ctx.save();
+    ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+    ctx.scale(player.direction, 1);
+    ctx.drawImage(playerImg, -player.w / 2, -player.h / 2, player.w, player.h);
+    ctx.restore();
+  }
+
+  // 子彈
+  bullets.forEach(b => {
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 敵人
+  enemies.forEach(e => {
+    ctx.fillStyle = e.type === "green" ? "#55cc55" : "#ffd633";
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+  });
+
+  // UI 分數與等級
+  ctx.fillStyle = "#333";
+  ctx.font = "20px Arial";
+  ctx.fillText("分數：" + score, 20, 30);
+  ctx.fillText("Lv：" + player.level, 20, canvas.height - 70);
+
+  // 血量愛心
+  for (let i = 0; i < player.maxHp; i++) {
+    ctx.fillStyle = i < player.hp ? "red" : "black";
+    ctx.beginPath();
+    ctx.arc(20 + i * 22, canvas.height - 40, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ===== 主迴圈 ===== */
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
