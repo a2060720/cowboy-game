@@ -19,7 +19,7 @@
     max-width: 900px;
     height: auto;
   }
-  /* 手機控制按鈕（極大版） */
+  /* 手機控制按鈕 */
   .button {
     position: fixed;
     bottom: 20px;
@@ -38,6 +38,22 @@
   #left { left: 20px; }
   #right { left: 240px; }
   #shoot { right: 20px; }
+
+  /* 重新開始按鈕 */
+  #restartBtn {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 40px;
+    padding: 20px 50px;
+    background: orange;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    display: none;
+    z-index: 2000;
+  }
 </style>
 </head>
 <body>
@@ -49,12 +65,15 @@
 <div id="right" class="button">&#8594;</div>
 <div id="shoot" class="button">&#9679;</div>
 
+<!-- 重新開始按鈕 -->
+<button id="restartBtn">重新開始</button>
+
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 /* ===== 玩家設定 ===== */
-const player = {
+let player = {
   x: 430,
   y: 380,
   w: 80,
@@ -172,6 +191,7 @@ function update() {
 
       if (player.hp <= 0) {
         gameOver = true;
+        document.getElementById("restartBtn").style.display = "block";
       }
     }
   });
@@ -258,7 +278,7 @@ function draw() {
     ctx.fillStyle = "white";
     ctx.font = "60px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("Game Over", canvas.width/2, canvas.height/2);
+    ctx.fillText("Game Over", canvas.width/2, canvas.height/2 - 50);
   }
 }
 
@@ -268,6 +288,33 @@ function loop() {
   draw();
   if (!gameOver) requestAnimationFrame(loop);
 }
+
+/* ===== 重新開始 ===== */
+const restartBtn = document.getElementById("restartBtn");
+restartBtn.addEventListener("click", () => {
+  // 重置狀態
+  player = {
+    x: 430,
+    y: 380,
+    w: 80,
+    h: 80,
+    hp: 10,
+    maxHp: 10,
+    level: 1,
+    exp: 0,
+    atk: 1,
+    knockback: 0,
+    direction: 1
+  };
+  score = 0;
+  bullets = [];
+  enemies = [];
+  fireCooldown = 0;
+  enemySpawnCounter = 0;
+  gameOver = false;
+  restartBtn.style.display = "none";
+  loop();
+});
 </script>
 
 </body>
