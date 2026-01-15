@@ -23,20 +23,20 @@
   .button {
     position: fixed;
     bottom: 20px;
-    width: 120px;
-    height: 120px;
+    width: 150px;
+    height: 150px;
     background: rgba(0,0,0,0.3);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 60px;
+    font-size: 75px;
     color: white;
     user-select: none;
     z-index: 1000;
   }
   #left { left: 20px; }
-  #right { left: 160px; }
+  #right { left: 200px; }
   #shoot { right: 20px; }
 </style>
 </head>
@@ -65,7 +65,7 @@ const player = {
   exp: 0,
   atk: 1,
   knockback: 0,
-  direction: 1 // 1:右, -1:左
+  direction: 1
 };
 
 /* ===== 遊戲狀態 ===== */
