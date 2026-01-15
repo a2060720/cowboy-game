@@ -75,6 +75,7 @@ let enemies = [];
 let keys = {};
 let fireCooldown = 0;
 let enemySpawnCounter = 0;
+let gameOver = false;
 
 /* ===== 載入主角圖片 ===== */
 const playerImg = new Image();
@@ -132,6 +133,8 @@ function spawnEnemy() {
 
 /* ===== 更新遊戲 ===== */
 function update() {
+  if (gameOver) return;
+
   // 玩家移動
   if (keys["ArrowLeft"] || touchState.left) { player.x -= 4; player.direction = -1; }
   if (keys["ArrowRight"] || touchState.right) { player.x += 4; player.direction = 1; }
@@ -166,6 +169,10 @@ function update() {
       player.hp--;
       player.knockback = e.x < player.x ? 18 : -18;
       enemies.splice(ei, 1);
+
+      if (player.hp <= 0) {
+        gameOver = true;
+      }
     }
   });
 
@@ -208,8 +215,7 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 玩家
-  if (imgLoaded) {
+  if (imgLoaded && !gameOver) {
     ctx.save();
     ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
     ctx.scale(player.direction, 1);
@@ -244,13 +250,23 @@ function draw() {
     ctx.arc(20 + i * 22, canvas.height - 40, 8, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // Game Over 顯示
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "white";
+    ctx.font = "60px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Game Over", canvas.width/2, canvas.height/2);
+  }
 }
 
 /* ===== 主迴圈 ===== */
 function loop() {
   update();
   draw();
-  requestAnimationFrame(loop);
+  if (!gameOver) requestAnimationFrame(loop);
 }
 </script>
 
