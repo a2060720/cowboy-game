@@ -2,310 +2,213 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>牛仔橫向打怪遊戲</title>
+<title>牛仔射擊遊戲</title>
 <style>
-  body {
-    margin: 0;
-    background: #bfe9ff;
-    overflow: hidden;
-    font-family: "Arial Rounded MT Bold", sans-serif;
-    touch-action: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-  }
-  canvas {
-    background: linear-gradient(#bfe9ff, #eafff1);
-    display: block;
-  }
-
-  /* 手機控制按鈕 */
-  .button {
-    position: fixed;
-    bottom: 20px;
-    width: 180px;
-    height: 180px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 90px;
-    color: white;
-    user-select: none;
-    z-index: 1000;
-  }
-  #left { left: 20px; }
-  #right { left: 240px; }
-  #shoot { right: 20px; }
-
-  /* 重新開始按鈕 */
-  #restartBtn {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 40px;
-    padding: 20px 50px;
-    background: orange;
-    border: none;
-    border-radius: 20px;
-    cursor: pointer;
-    display: none;
-    z-index: 2000;
-  }
+body { margin:0; background:#bfe9ff; overflow:hidden; font-family:Arial,sans-serif; touch-action:none;}
+canvas { display:block; margin:auto; background:linear-gradient(#bfe9ff,#eafff1);}
+.button { position:fixed; bottom:20px; width:180px; height:180px; background:rgba(0,0,0,0.35); border-radius:50%; font-size:90px; color:white; display:flex; align-items:center; justify-content:center; user-select:none;}
+#left{left:20px;} #right{left:240px;} #shoot{right:20px;}
+#restartBtn{position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-size:36px; padding:20px 50px; border-radius:16px; border:none; background:orange; display:none;}
 </style>
 </head>
 <body>
-
 <canvas id="game" width="900" height="500"></canvas>
-
-<!-- 手機按鈕 -->
-<div id="left" class="button">&#8592;</div>
-<div id="right" class="button">&#8594;</div>
-<div id="shoot" class="button">&#9679;</div>
-
-<!-- 重新開始按鈕 -->
+<div id="left" class="button">◀</div>
+<div id="right" class="button">▶</div>
+<div id="shoot" class="button">●</div>
 <button id="restartBtn">重新開始</button>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-/* ===== 玩家設定 ===== */
-let player;
-
-/* ===== 遊戲狀態 ===== */
-let score, bullets, enemies, keys, fireCooldown, enemySpawnCounter, gameOver;
-
-/* ===== 初始化遊戲 ===== */
-function initGame() {
-  player = {
-    x: 430,
-    y: 380,
-    w: 80,
-    h: 80,
-    hp: 10,
-    maxHp: 10,
-    level: 1,
-    exp: 0,
-    atk: 1,
-    knockback: 0,
-    direction: 1
-  };
-  score = 0;
-  bullets = [];
-  enemies = [];
-  keys = {};
-  fireCooldown = 0;
-  enemySpawnCounter = 0;
-  gameOver = false;
-  document.getElementById("restartBtn").style.display = "none";
-}
-
-/* ===== 載入主角圖片 ===== */
-const playerImg = new Image();
-playerImg.src = "https://i.postimg.cc/2bs2xmYj/cowboy.png";
-let imgLoaded = false;
-playerImg.onload = () => {
-  imgLoaded = true;
-  initGame();
-  loop();
+const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
+const restartBtn=document.getElementById("restartBtn");
+const sources={
+    cowboy:"https://i.postimg.cc/2bs2xmYj/cowboy.png",
+    greenSlime:"https://i.postimg.cc/kBqCVW2g/green-slime.gif",
+    yellowEnemy:"https://i.postimg.cc/87qfgyCz/yellow-enemy.png",
+    boss:"https://i.postimg.cc/njdQgn9M/boss.png"
 };
+const images={};
+function preloadImages(s){ return Promise.all(Object.entries(s).map(([k,src])=>new Promise(r=>{const i=new Image(); i.src=src;i.onload=()=>{images[k]=i;r();};})));}
 
-/* ===== 鍵盤控制 ===== */
-addEventListener("keydown", e => keys[e.code] = true);
-addEventListener("keyup", e => keys[e.code] = false);
+// 控制
+const input={left:false,right:false,shoot:false,jump:false};
+document.addEventListener("keydown",e=>{ if(e.code==="ArrowLeft")input.left=true; if(e.code==="ArrowRight")input.right=true; if(e.code==="ArrowUp"||e.code==="KeyW")input.jump=true; if(e.code==="Space")input.shoot=true; });
+document.addEventListener("keyup",e=>{ if(e.code==="ArrowLeft")input.left=false; if(e.code==="ArrowRight")input.right=false; if(e.code==="ArrowUp"||e.code==="KeyW")input.jump=false; if(e.code==="Space")input.shoot=false; });
+document.getElementById("left").ontouchstart=()=>input.left=true; document.getElementById("left").ontouchend=()=>input.left=false;
+document.getElementById("right").ontouchstart=()=>input.right=true; document.getElementById("right").ontouchend=()=>input.right=false;
+document.getElementById("shoot").ontouchstart=()=>input.shoot=true; document.getElementById("shoot").ontouchend=()=>input.shoot=false;
 
-/* ===== 手機觸控控制 ===== */
-const btnLeft = document.getElementById("left");
-const btnRight = document.getElementById("right");
-const btnShoot = document.getElementById("shoot");
+// 碰撞
+function isColliding(a,b){return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;}
 
-let touchState = {left:false, right:false, shoot:false};
+// 分數倍率
+function getScoreMultiplier(lv){ return Math.floor(lv/3); }
 
-btnLeft.addEventListener("touchstart", ()=>touchState.left=true);
-btnLeft.addEventListener("touchend", ()=>touchState.left=false);
-btnRight.addEventListener("touchstart", ()=>touchState.right=true);
-btnRight.addEventListener("touchend", ()=>touchState.right=false);
-btnShoot.addEventListener("touchstart", ()=>touchState.shoot=true);
-btnShoot.addEventListener("touchend", ()=>touchState.shoot=false);
-
-/* ===== 射擊 ===== */
-function shoot() {
-  bullets.push({
-    x: player.direction === 1 ? player.x + player.w : player.x,
-    y: player.y + player.h / 2,
-    r: 6,
-    speed: (7 + player.level * 0.05) * player.direction,
-    color: `hsl(${player.level * 3}, 80%, 55%)`
-  });
-}
-
-/* ===== 生成敵人 ===== */
-function spawnEnemy() {
-  if (enemies.length >= 6) return;
-  const type = Math.random() < 0.7 ? "green" : "yellow";
-  const speed = 1 + Math.min(player.level * 0.02, 1.8);
-  enemies.push({
-    x: Math.random() < 0.5 ? -50 : canvas.width + 50,
-    y: 380,
-    w: 40,
-    h: 40,
-    hp: type === "green" ? 1 : 2,
-    type,
-    speed
-  });
-}
-
-/* ===== 更新遊戲 ===== */
-function update() {
-  if (gameOver) return;
-
-  // 玩家移動
-  if (keys["ArrowLeft"] || touchState.left) { player.x -= 4; player.direction = -1; }
-  if (keys["ArrowRight"] || touchState.right) { player.x += 4; player.direction = 1; }
-  player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
-
-  // 擊退效果
-  if (player.knockback !== 0) {
-    player.x += player.knockback;
-    player.knockback *= 0.8;
-    if (Math.abs(player.knockback) < 0.5) player.knockback = 0;
-  }
-
-  // 連射
-  if ((keys["Space"] || touchState.shoot) && fireCooldown <= 0) {
-    shoot();
-    fireCooldown = Math.max(10 - Math.floor(player.level / 15), 5);
-  }
-  if (fireCooldown > 0) fireCooldown--;
-
-  // 子彈移動
-  bullets.forEach(b => b.x += b.speed);
-  bullets = bullets.filter(b => b.x > -20 && b.x < canvas.width + 20);
-
-  // 敵人移動與碰撞
-  enemies.forEach((e, ei) => {
-    e.x += e.x < player.x ? e.speed : -e.speed;
-    if (
-      e.x < player.x + player.w &&
-      e.x + e.w > player.x &&
-      e.y < player.y + player.h
-    ) {
-      player.hp--;
-      player.knockback = e.x < player.x ? 18 : -18;
-      enemies.splice(ei, 1);
-
-      if (player.hp <= 0) {
-        gameOver = true;
-        document.getElementById("restartBtn").style.display = "block";
-      }
+// 類別
+class Bullet{constructor(x,y,spd,color){this.x=x; this.y=y; this.r=6; this.spd=spd; this.color=color;} update(){this.x+=this.spd;} draw(){ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}}
+class Player{
+    constructor(){
+        this.w=80; this.h=80; this.x=420; this.y=380; this.vy=0; this.isJumping=false; this.dir=1; this.hp=10; this.maxHp=10; this.lv=1; this.atk=1; this.exp=0; this.fireCD=0;
     }
-  });
-
-  // 子彈擊中敵人判定
-  bullets.forEach((b, bi) => {
-    enemies.forEach((e, ei) => {
-      const closestX = Math.max(e.x, Math.min(b.x, e.x + e.w));
-      const closestY = Math.max(e.y, Math.min(b.y, e.y + e.h));
-      const dx = b.x - closestX;
-      const dy = b.y - closestY;
-      if (dx*dx + dy*dy <= b.r*b.r) {
-        e.hp -= player.atk;
-        bullets.splice(bi, 1);
-        if (e.hp <= 0) {
-          score += e.type === "yellow" ? 20 : 10;
-          player.exp += e.type === "yellow" ? 20 : 10;
-          enemies.splice(ei, 1);
+    shoot(){
+        if(this.fireCD<=0){
+            bullets.push(new Bullet(this.dir===1?this.x+this.w:this.x,this.y+this.h/2,(7+this.lv*0.1)*this.dir,`hsl(${this.lv*4},80%,55%)`));
+            this.fireCD=10;
         }
+    }
+    update(){
+        if(input.left) this.x-=4, this.dir=-1;
+        if(input.right) this.x+=4, this.dir=1;
+        this.x=Math.max(0,Math.min(canvas.width-this.w,this.x));
+
+        if(input.jump && !this.isJumping){ this.vy=-10; this.isJumping=true; }
+        this.vy+=0.5;
+        this.y+=this.vy;
+        if(this.y>=380){ this.y=380; this.vy=0; this.isJumping=false; }
+
+        if(input.shoot) this.shoot();
+        if(this.fireCD>0) this.fireCD--;
+
+        if(this.exp>=this.lv*20 && this.lv<100){ 
+            this.exp-=this.lv*20; 
+            this.lv++; 
+            this.atk=Math.min(10,this.atk+0.2); // 攻擊上限10
+        }
+    }
+    draw(){
+        ctx.save(); ctx.translate(this.x+this.w/2,this.y); ctx.scale(this.dir,1); ctx.drawImage(images.cowboy,-this.w/2,0,this.w,this.h); ctx.restore();
+        for(let i=0;i<this.maxHp;i++){ ctx.fillStyle=i<this.hp?"red":"black"; ctx.beginPath(); ctx.arc(20+i*22,canvas.height-40,8,0,Math.PI*2); ctx.fill(); }
+    }
+}
+class Enemy{
+    constructor(type){
+        this.w=50; this.h=50; this.y=380; this.type=type; 
+        this.hp=type==="green"?1:2; 
+        this.spd=Math.min(3,1.2+player.lv*0.03); // 速度上限3
+        this.x=Math.random()<0.5?-60:canvas.width+60;
+    }
+    update(){ this.x+=this.x<player.x?this.spd:-this.spd; }
+    draw(){ ctx.drawImage(this.type==="green"?images.greenSlime:images.yellowEnemy,this.x,this.y,this.w,this.h); }
+}
+class Boss{
+    constructor(){ this.w=200; this.h=200; this.x=canvas.width/2-100; this.y=240; this.hp=this.maxHp=60+player.lv*3; this.dir=1; this.spd=1.5; this.shootCD=0; }
+    update(){
+        this.x+=this.spd*this.dir;
+        if(this.x<=0||this.x+this.w>=canvas.width) this.dir*=-1;
+        if(this.shootCD<=0){ bossBullets.push({x:this.x+this.w/2,y:this.y+this.h,r:8,spd:4}); this.shootCD=60; }
+        this.shootCD--;
+    }
+    draw(){
+        ctx.drawImage(images.boss,this.x,this.y,this.w,this.h);
+        ctx.fillStyle="black"; ctx.fillRect(this.x,this.y-15,this.w,10);
+        ctx.fillStyle="red"; ctx.fillRect(this.x,this.y-15,this.w*(this.hp/this.maxHp),10);
+    }
+}
+
+// 全域
+let player, bullets, enemies, boss, bossBullets, score, gameOver;
+let spawnTimer=0,bossTimer=0,healTimer=0;
+
+// 初始化
+function init(){player=new Player(); bullets=[]; enemies=[]; bossBullets=[]; boss=null; score=0; gameOver=false; spawnTimer=0; bossTimer=0; healTimer=0; restartBtn.style.display="none";}
+
+// 生成
+function spawnEnemy(){ enemies.push(new Enemy(Math.random()<0.7?"green":"yellow")); }
+function spawnBoss(){ boss=new Boss(); }
+
+// 更新
+function update(){
+  if(gameOver) return;
+  player.update();
+
+  bullets.forEach(b=>b.update());
+  bullets=bullets.filter(b=>b.x>-50&&b.x<canvas.width+50);
+
+  // 小怪碰撞玩家
+  enemies.forEach(e=>e.update());
+  for(let i=enemies.length-1;i>=0;i--){
+      let e=enemies[i];
+      if(isColliding(e,player)){ player.hp--; if(player.hp<=0){gameOver=true; restartBtn.style.display="block";} enemies.splice(i,1); }
+  }
+
+  // 子彈碰撞小怪 (反向迴圈)
+  for(let i=bullets.length-1;i>=0;i--){
+      let b=bullets[i];
+      for(let j=enemies.length-1;j>=0;j--){
+          let e=enemies[j];
+          if(isColliding({x:b.x-b.r,y:b.y-b.r,w:b.r*2,h:b.r*2},e)){
+              e.hp-=player.atk;
+              if(e.hp<=0){
+                  score = Math.min(999999, score + (e.type==="yellow"?20:10)*(1+getScoreMultiplier(player.lv)));
+                  player.exp+=10;
+                  enemies.splice(j,1);
+              }
+              bullets.splice(i,1);
+              break;
+          }
       }
-    });
-  });
-
-  // 升級
-  if (player.exp >= player.level * 50 && player.level < 100) {
-    player.exp = 0;
-    player.level++;
-    player.atk += 0.2;
   }
 
-  // 敵人生成
-  enemySpawnCounter++;
-  const spawnRate = Math.max(50 - player.level, 30);
-  if (enemySpawnCounter >= spawnRate) {
-    spawnEnemy();
-    enemySpawnCounter = 0;
+  // BOSS邏輯
+  if(boss){
+      boss.update();
+      for(let i=bullets.length-1;i>=0;i--){
+          let b=bullets[i];
+          if(isColliding({x:b.x-b.r,y:b.y-b.r,w:b.r*2,h:b.r*2},boss)){
+              boss.hp-=player.atk;
+              if(boss.hp<=0){
+                  score = Math.min(999999, score + 500*(1+getScoreMultiplier(player.lv)));
+                  player.exp+=100;
+                  boss=null;
+              }
+              bullets.splice(i,1);
+          }
+      }
   }
+
+  // BOSS子彈
+  for(let i=bossBullets.length-1;i>=0;i--){
+      let b=bossBullets[i]; b.y+=b.spd;
+      if(isColliding({x:b.x-b.r,y:b.y-b.r,w:b.r*2,h:b.r*2},player)){ player.hp--; if(player.hp<=0){gameOver=true; restartBtn.style.display="block";} bossBullets.splice(i,1); }
+      else if(b.y>canvas.height+20) bossBullets.splice(i,1);
+  }
+
+  // 回血
+  healTimer++; if(healTimer>=120){player.hp=Math.min(player.maxHp,player.hp+1); healTimer=0;}
+
+  // 生成小怪，BOSS出現時暫停
+  if(!boss){
+      spawnTimer++;
+      if(spawnTimer>50 && enemies.length<10){ spawnEnemy(); spawnTimer=0; }
+  } else spawnTimer=0;
+
+  // BOSS生成
+  bossTimer++; if(bossTimer>1800&&!boss){ spawnBoss(); bossTimer=0; }
 }
 
-/* ===== 繪製畫面 ===== */
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// 繪圖
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.textAlign="start"; ctx.textBaseline="top"; ctx.fillStyle="#333"; ctx.font="20px Arial";
 
-  if (imgLoaded && !gameOver) {
-    ctx.save();
-    ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
-    ctx.scale(player.direction, 1);
-    ctx.drawImage(playerImg, -player.w / 2, -player.h / 2, player.w, player.h);
-    ctx.restore();
-  }
+  player.draw();
+  bullets.forEach(b=>b.draw());
+  enemies.forEach(e=>e.draw());
+  if(boss) boss.draw();
+  bossBullets.forEach(b=>{ctx.fillStyle="purple";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();});
 
-  // 子彈
-  bullets.forEach(b => {
-    ctx.fillStyle = b.color;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  ctx.fillStyle="#333";
+  ctx.fillText("分數："+score,20,30);
+  ctx.fillText("Lv："+player.lv,20,canvas.height-70);
 
-  // 敵人
-  enemies.forEach(e => {
-    ctx.fillStyle = e.type === "green" ? "#55cc55" : "#ffd633";
-    ctx.fillRect(e.x, e.y, e.w, e.h);
-  });
-
-  // UI 分數與等級（固定位置）
-  ctx.fillStyle = "#333";
-  ctx.font = "20px Arial";
-  ctx.textAlign = "left";
-  ctx.fillText("分數：" + score, 20, 30);
-  ctx.fillText("Lv：" + player.level, 20, canvas.height - 70);
-
-  // 血量愛心（固定位置）
-  for (let i = 0; i < player.maxHp; i++) {
-    ctx.fillStyle = i < player.hp ? "red" : "black";
-    ctx.beginPath();
-    ctx.arc(20 + i * 22, canvas.height - 40, 8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Game Over 顯示
-  if (gameOver) {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle = "white";
-    ctx.font = "60px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("Game Over", canvas.width/2, canvas.height/2 - 50);
-  }
+  if(gameOver){ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#fff"; ctx.font="50px Arial"; ctx.textAlign="center"; ctx.fillText("Game Over",canvas.width/2,canvas.height/2);}
 }
 
-/* ===== 主迴圈 ===== */
-function loop() {
-  update();
-  draw();
-  if (!gameOver) requestAnimationFrame(loop);
-}
+// 遊戲循環
+function loop(){update();draw();requestAnimationFrame(loop);}
 
-/* ===== 重新開始 ===== */
-const restartBtn = document.getElementById("restartBtn");
-restartBtn.addEventListener("click", () => {
-  initGame();
-  loop();
-});
+preloadImages(sources).then(()=>{init(); loop();});
+restartBtn.onclick=()=>init();
 </script>
-
 </body>
 </html>
